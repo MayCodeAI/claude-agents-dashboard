@@ -26,7 +26,7 @@ A "remove" button on each card drops that session from the in-memory state.
 ## Install
 
 ```bash
-cd /Users/pawelmaj/Documents/Projects/My/AgentDashboard
+cd /absolute/path/to/AgentDashboard
 npm install
 ```
 
@@ -65,6 +65,10 @@ Code session, regardless of project:
   the card flips back to **Working** instead of staying orange until the
   next `Stop`.
 
+Replace `/absolute/path/to/AgentDashboard` below with the actual checkout
+path on your machine (Claude Code's `command` field does not expand `~` or
+shell variables).
+
 ```json
 {
   "hooks": {
@@ -73,7 +77,7 @@ Code session, regardless of project:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-prompt-submit.mjs"
+            "command": "/absolute/path/to/AgentDashboard/hooks/on-prompt-submit.mjs"
           }
         ]
       }
@@ -83,7 +87,7 @@ Code session, regardless of project:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-stop.mjs"
+            "command": "/absolute/path/to/AgentDashboard/hooks/on-stop.mjs"
           }
         ]
       }
@@ -93,7 +97,7 @@ Code session, regardless of project:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-notification.mjs"
+            "command": "/absolute/path/to/AgentDashboard/hooks/on-notification.mjs"
           }
         ]
       }
@@ -104,7 +108,7 @@ Code session, regardless of project:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-ask-user-question.mjs"
+            "command": "/absolute/path/to/AgentDashboard/hooks/on-ask-user-question.mjs"
           }
         ]
       },
@@ -112,7 +116,7 @@ Code session, regardless of project:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-pre-tool-use.mjs"
+            "command": "/absolute/path/to/AgentDashboard/hooks/on-pre-tool-use.mjs"
           }
         ]
       }
@@ -123,7 +127,7 @@ Code session, regardless of project:
         "hooks": [
           {
             "type": "command",
-            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-ask-user-question-answered.mjs"
+            "command": "/absolute/path/to/AgentDashboard/hooks/on-ask-user-question-answered.mjs"
           }
         ]
       }
@@ -205,7 +209,7 @@ suspect otherwise, run the hook by hand:
 
 ```bash
 echo '{"session_id":"x","cwd":"/tmp","prompt":"test"}' | \
-  /Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-prompt-submit.mjs
+  /absolute/path/to/AgentDashboard/hooks/on-prompt-submit.mjs
 ```
 
 **Test the Awaiting input state by hand.** Start a session (so the agent
@@ -213,7 +217,7 @@ exists in the dashboard), then:
 
 ```bash
 echo '{"session_id":"<your-session-id>","message":"Allow Bash command?"}' | \
-  /Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-notification.mjs
+  /absolute/path/to/AgentDashboard/hooks/on-notification.mjs
 ```
 
 The card should turn orange with the message shown. Send a new prompt or
@@ -223,14 +227,14 @@ You can test the `AskUserQuestion` path the same way:
 
 ```bash
 echo '{"session_id":"<your-session-id>","tool_input":{"questions":[{"question":"Pick a color"},{"question":"Pick a size"}]}}' | \
-  /Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-ask-user-question.mjs
+  /absolute/path/to/AgentDashboard/hooks/on-ask-user-question.mjs
 ```
 
 And clear it as if you'd answered:
 
 ```bash
 echo '{"session_id":"<your-session-id>"}' | \
-  /Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-ask-user-question-answered.mjs
+  /absolute/path/to/AgentDashboard/hooks/on-ask-user-question-answered.mjs
 ```
 
 **Port 3333 already in use.** Start the server on a different port:
