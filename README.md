@@ -43,7 +43,7 @@ not blocked.
 
 ## Wire up the hooks (global)
 
-Edit `~/.claude/settings.json` to add five hooks that run for every Claude
+Edit `~/.claude/settings.json` to add six hooks that run for every Claude
 Code session, regardless of project:
 
 - `UserPromptSubmit` — fires when you send a prompt (agent starts working).
@@ -54,6 +54,12 @@ Code session, regardless of project:
   asks you a structured question. Claude Code does **not** emit a
   `Notification` event for `AskUserQuestion`, so without this hook the
   dashboard would miss those prompts.
+- `PreToolUse` (no matcher) — fires before *any* tool runs. Clears the
+  **Awaiting input** state because Claude Code does **not** emit any
+  event when you grant a permission prompt; the next tool execution is
+  the first observable sign that the agent is no longer blocked. The
+  hook itself ignores `AskUserQuestion` so it doesn't fight the matcher
+  above.
 - `PostToolUse` (matcher `AskUserQuestion`) — fires right after you
   answer the question. Clears the **Awaiting input** state mid-turn so
   the card flips back to **Working** instead of staying orange until the
@@ -101,6 +107,14 @@ Code session, regardless of project:
             "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-ask-user-question.mjs"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/pawelmaj/Documents/Projects/My/AgentDashboard/hooks/on-pre-tool-use.mjs"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -132,6 +146,7 @@ hook config.
 Claude Code session ─[UserPromptSubmit hook]───────────────┐
 Claude Code session ─[Notification hook]────────────────── │ POST JSON
 Claude Code session ─[PreToolUse hook: AskUserQuestion]─── │
+Claude Code session ─[PreToolUse hook: any other tool]──── │
 Claude Code session ─[PostToolUse hook: AskUserQuestion]── │
 Claude Code session ─[Stop hook]────────────────────────── │
                                                            ▼
@@ -165,6 +180,11 @@ Claude Code session ─[Stop hook]───────────────�
   text (with `(+N more)` suffix when there are multiple), POSTs
   `/events/notify`. Needed because Claude Code does not emit a
   `Notification` event for `AskUserQuestion` prompts.
+- `hooks/on-pre-tool-use.mjs` — `PreToolUse` hook with no matcher. POSTs
+  `/events/answered` for every tool *except* `AskUserQuestion`, clearing
+  the **Awaiting input** state. Necessary because Claude Code emits no
+  event when a permission prompt is granted — the next tool execution
+  is the first observable signal.
 - `hooks/on-ask-user-question-answered.mjs` — `PostToolUse` hook with
   matcher `AskUserQuestion`. POSTs `/events/answered` to clear the
   `awaiting` state mid-turn, so the card returns to **Working** as soon
