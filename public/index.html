@@ -15,6 +15,7 @@
       --active: #3fb950;
       --idle: #6e7681;
       --accent: #58a6ff;
+      --awaiting: #f0883e;
     }
     * { box-sizing: border-box; }
     body {
@@ -59,6 +60,41 @@
       gap: 8px;
     }
     .card.active { border-color: var(--active); }
+    .card.awaiting {
+      border-color: var(--awaiting);
+      box-shadow: 0 0 0 1px var(--awaiting), 0 0 14px rgba(240, 136, 62, 0.35);
+    }
+    .status.awaiting { color: var(--awaiting); }
+    .dot.awaiting {
+      background: var(--awaiting);
+      box-shadow: 0 0 8px var(--awaiting);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .awaiting-msg {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--text);
+      background: rgba(240, 136, 62, 0.12);
+      border: 1px solid rgba(240, 136, 62, 0.4);
+      border-radius: 6px;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .awaiting-msg::before {
+      content: "Waiting for your input";
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--awaiting);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
     .row {
       display: flex;
       justify-content: space-between;
@@ -155,31 +191,49 @@
     }
 
     function render() {
-      const active = agents.filter(a => !a.end_time).length;
+      const isAwaiting = (a) => !a.end_time && a.awaiting;
+      const awaiting = agents.filter(isAwaiting).length;
+      const active = agents.filter(a => !a.end_time && !a.awaiting).length;
       summary.textContent = agents.length === 0
         ? ''
-        : `${active} active · ${agents.length} total`;
+        : `${awaiting} awaiting · ${active} active · ${agents.length} total`;
 
       if (agents.length === 0) {
         grid.innerHTML = '<div class="empty">No agents have reported yet. Start a Claude Code session in any project.</div>';
         return;
       }
 
+      // Sort: awaiting first, then active, then idle.
+      const sorted = [...agents].sort((a, b) => {
+        const rank = (x) => isAwaiting(x) ? 0 : (!x.end_time ? 1 : 2);
+        return rank(a) - rank(b);
+      });
+
       grid.innerHTML = '';
-      for (const a of agents) {
-        const isActive = !a.end_time;
+      for (const a of sorted) {
+        const awaitingNow = isAwaiting(a);
+        const isActive = !a.end_time && !awaitingNow;
+        const cardClass = awaitingNow ? 'awaiting' : (isActive ? 'active' : '');
+        const statusClass = awaitingNow ? 'awaiting' : (isActive ? 'active' : '');
+        const dotClass = awaitingNow ? 'awaiting' : (isActive ? 'live' : '');
+        const statusLabel = awaitingNow ? 'Awaiting input' : (isActive ? 'Working' : 'Idle');
+        const awaitingBlock = awaitingNow
+          ? `<div class="awaiting-msg">${escapeHtml(a.awaiting.message) || '<em style="color:var(--muted)">(no message)</em>'}</div>`
+          : '';
+
         const card = document.createElement('div');
-        card.className = 'card' + (isActive ? ' active' : '');
+        card.className = 'card' + (cardClass ? ' ' + cardClass : '');
         card.innerHTML = `
           <div class="row">
-            <span class="status ${isActive ? 'active' : ''}">
-              <span class="dot ${isActive ? 'live' : ''}"></span>
-              ${isActive ? 'Working' : 'Idle'} · ${duration(a.start_time, a.end_time)}
+            <span class="status ${statusClass}">
+              <span class="dot ${dotClass}"></span>
+              ${statusLabel} · ${duration(a.start_time, a.end_time)}
             </span>
             <button class="clear" data-id="${a.session_id}">remove</button>
           </div>
           <div class="cwd">${escapeHtml(a.cwd)}</div>
           <div class="prompt">${escapeHtml(a.prompt_preview) || '<em style="color:var(--muted)">(empty)</em>'}</div>
+          ${awaitingBlock}
           <div class="times">
             <span>start: ${fmt(a.start_time)}</span>
             <span>${a.end_time ? 'end: ' + fmt(a.end_time) : ''}</span>
@@ -188,6 +242,11 @@
         `;
         grid.appendChild(card);
       }
+
+      // Reflect awaiting count in the page title so it's visible from another tab.
+      document.title = awaiting > 0
+        ? `(${awaiting}) Agent Dashboard`
+        : 'Agent Dashboard';
     }
 
     function escapeHtml(s) {

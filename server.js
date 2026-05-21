@@ -1,8 +1,13 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const HOME = homedir();
+const redactHome = (s) =>
+  typeof s === 'string' && HOME ? s.split(HOME).join('~') : s;
 
 const app = express();
 app.use(express.json({ limit: '64kb' }));
@@ -12,11 +17,17 @@ const agents = new Map();
 const clients = new Set();
 
 function snapshot() {
-  return [...agents.values()].sort((a, b) => {
-    const aTime = a.end_time ?? a.start_time;
-    const bTime = b.end_time ?? b.start_time;
-    return bTime.localeCompare(aTime);
-  });
+  return [...agents.values()]
+    .sort((a, b) => {
+      const aTime = a.end_time ?? a.start_time;
+      const bTime = b.end_time ?? b.start_time;
+      return bTime.localeCompare(aTime);
+    })
+    .map((a) => ({
+      ...a,
+      cwd: redactHome(a.cwd),
+      prompt_preview: redactHome(a.prompt_preview),
+    }));
 }
 
 function broadcast() {
@@ -33,6 +44,7 @@ app.post('/events/start', (req, res) => {
     prompt_preview: prompt_preview ?? '',
     start_time: start_time ?? new Date().toISOString(),
     end_time: null,
+    awaiting: null,
   });
   broadcast();
   res.sendStatus(204);
@@ -44,6 +56,32 @@ app.post('/events/stop', (req, res) => {
   const agent = agents.get(session_id);
   if (agent) {
     agent.end_time = end_time ?? new Date().toISOString();
+    agent.awaiting = null;
+    broadcast();
+  }
+  res.sendStatus(204);
+});
+
+app.post('/events/notify', (req, res) => {
+  const { session_id, message, notified_at } = req.body ?? {};
+  if (!session_id) return res.sendStatus(400);
+  const agent = agents.get(session_id);
+  if (agent) {
+    agent.awaiting = {
+      message: message ?? '',
+      notified_at: notified_at ?? new Date().toISOString(),
+    };
+    broadcast();
+  }
+  res.sendStatus(204);
+});
+
+app.post('/events/answered', (req, res) => {
+  const { session_id } = req.body ?? {};
+  if (!session_id) return res.sendStatus(400);
+  const agent = agents.get(session_id);
+  if (agent && agent.awaiting) {
+    agent.awaiting = null;
     broadcast();
   }
   res.sendStatus(204);
