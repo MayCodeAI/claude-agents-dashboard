@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Dashboard</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e1116;
+      --panel: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --active: #3fb950;
+      --idle: #6e7681;
+      --accent: #58a6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+    }
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    h1 { font-size: 20px; margin: 0; font-weight: 600; }
+    .conn {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--idle);
+    }
+    .dot.live { background: var(--active); box-shadow: 0 0 8px var(--active); }
+    .summary { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .card.active { border-color: var(--active); }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    .status.active { color: var(--active); }
+    .cwd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: var(--accent);
+      word-break: break-all;
+    }
+    .prompt {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--text);
+      background: rgba(255,255,255,0.03);
+      border-radius: 6px;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .times {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .session {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 60px 20px;
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+    }
+    button.clear {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button.clear:hover { color: var(--text); border-color: var(--text); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agent Dashboard</h1>
+    <div class="conn"><span id="dot" class="dot"></span><span id="connText">connecting…</span></div>
+  </header>
+  <div class="summary" id="summary"></div>
+  <div id="grid" class="grid"></div>
+
+  <script>
+    const grid = document.getElementById('grid');
+    const summary = document.getElementById('summary');
+    const dot = document.getElementById('dot');
+    const connText = document.getElementById('connText');
+    let agents = [];
+
+    function fmt(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleString([], { hour12: false });
+    }
+
+    function duration(start, end) {
+      if (!start) return '';
+      const ms = (end ? new Date(end) : new Date()) - new Date(start);
+      const s = Math.max(0, Math.floor(ms / 1000));
+      if (s < 60) return `${s}s`;
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}m ${s % 60}s`;
+      const h = Math.floor(m / 60);
+      return `${h}h ${m % 60}m`;
+    }
+
+    function render() {
+      const active = agents.filter(a => !a.end_time).length;
+      summary.textContent = agents.length === 0
+        ? ''
+        : `${active} active · ${agents.length} total`;
+
+      if (agents.length === 0) {
+        grid.innerHTML = '<div class="empty">No agents have reported yet. Start a Claude Code session in any project.</div>';
+        return;
+      }
+
+      grid.innerHTML = '';
+      for (const a of agents) {
+        const isActive = !a.end_time;
+        const card = document.createElement('div');
+        card.className = 'card' + (isActive ? ' active' : '');
+        card.innerHTML = `
+          <div class="row">
+            <span class="status ${isActive ? 'active' : ''}">
+              <span class="dot ${isActive ? 'live' : ''}"></span>
+              ${isActive ? 'Working' : 'Idle'} · ${duration(a.start_time, a.end_time)}
+            </span>
+            <button class="clear" data-id="${a.session_id}">remove</button>
+          </div>
+          <div class="cwd">${escapeHtml(a.cwd)}</div>
+          <div class="prompt">${escapeHtml(a.prompt_preview) || '<em style="color:var(--muted)">(empty)</em>'}</div>
+          <div class="times">
+            <span>start: ${fmt(a.start_time)}</span>
+            <span>${a.end_time ? 'end: ' + fmt(a.end_time) : ''}</span>
+          </div>
+          <div class="session">${a.session_id}</div>
+        `;
+        grid.appendChild(card);
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    grid.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button.clear');
+      if (!btn) return;
+      await fetch(`/agents/${btn.dataset.id}`, { method: 'DELETE' });
+    });
+
+    // Refresh durations every second so "Working · 12s" ticks live.
+    setInterval(() => { if (agents.some(a => !a.end_time)) render(); }, 1000);
+
+    function connect() {
+      const es = new EventSource('/events');
+      es.onopen = () => {
+        dot.classList.add('live');
+        connText.textContent = 'live';
+      };
+      es.onmessage = (ev) => {
+        agents = JSON.parse(ev.data);
+        render();
+      };
+      es.onerror = () => {
+        dot.classList.remove('live');
+        connText.textContent = 'reconnecting…';
+      };
+    }
+    connect();
+  </script>
+</body>
+</html>
